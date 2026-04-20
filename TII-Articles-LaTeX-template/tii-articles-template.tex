@@ -1,0 +1,1195 @@
+\documentclass[journal,twoside,web]{ieeecolor}
+\usepackage{generic}
+\usepackage{cite}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{graphicx}
+\graphicspath{{./}{../}}
+\usepackage{dblfloatfix}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage[table]{xcolor}
+\definecolor{black}{rgb}{0,0,0}
+\definecolor{blue}{rgb}{0,0,1}
+\definecolor{red}{rgb}{1,0,0}
+\definecolor{subsectioncolor}{rgb}{0,0,0}
+\definecolor{nblue}{rgb}{0,0.263,0.576}
+\definecolor{mblue}{rgb}{0.075,0.541,0.855}
+\usepackage{array}
+\usepackage{makecell}
+\usepackage{textcomp}
+
+\usepackage{etoolbox}
+
+\definecolor{myorange}{RGB}{220,90,20}
+
+\makeatletter
+\patchcmd{\subsection}{\normalfont}{\normalfont\color{myorange}}{}{}
+\makeatother
+
+% \usepackage{xeCJK}
+\newcommand{\lmx}[1]{\textcolor{red}{#1}}
+\definecolor{tableblue}{RGB}{235, 245, 252}
+
+% ---- Consistent cross-references for IEEE Trans-style templates ----
+\newcommand{\figref}[1]{Fig.~\ref{#1}}
+\newcommand{\tabref}[1]{Table~\ref{#1}}
+\newcommand{\algoref}[1]{Algorithm~\ref{#1}}
+\newcommand{\eqnref}[1]{\eqref{#1}} % no leading word, per Trans convention
+\newcommand{\secref}[1]{Sec.~\ref{#1}}
+
+\def\BibTeX{{\rm B\kern-.05em{\sc i\kern-.025em b}\kern-.08em
+T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
+\markboth{\journalname, VOL. XX, NO. XX, XXXX}
+{Author \MakeLowercase{\textit{et al.}}: Title}
+
+\makeatletter
+\let\NAT@parse\undefined
+\makeatother
+\usepackage[colorlinks=true, citecolor=blue, linkcolor=blue]{hyperref}
+
+\begin{document}
+\title{Efficient and Explainable High-Resolution VQA for Power Inspection with a Domain-Adapted Multimodal Large Language Model}
+\author{Mingxuan Li, \IEEEmembership{Member, IEEE} % 如有其他共同作者，在此处继续添加，例如：, Second B. Author, \IEEEmembership{Student Member, IEEE}
+  \thanks{Manuscript received XX XX, 20XX; revised XX XX, 20XX.}%
+  \thanks{M. Li is with XX (e-mail: \href{mailto:xx@xx.edu}{xx@xx.edu}).}%
+}
+
+\maketitle
+
+\begin{abstract}
+  Large language models (LLMs) have shown
+  exciting potential in powering the growth of many industries,
+  yet their adoption in the power electronics (PE) sector is
+  hindered by a lack of specialized PE technical expertise
+  and challenges in processing PE-specific data. This study
+  presents a pioneering approach to establish a multimodal
+  LLM tailored for PE design applications, named PE-GPT.
+  The methodology involves enhancing PE-GPT with retrieval
+  augmented generation from a PE knowledge base, and
+  proposes a hybrid framework that integrates an LLM agent
+  with metaheuristic algorithms, Model Zoo, and Simulation
+  Repository. This enhances its multimodal processing capabilities and enables integration into the existing design
+  workflow. The PE-GPT methodology is demonstrated with
+  two case studies: modulation design of the dual-active
+  bridge (DAB) converter and circuit parameter design of the
+  buck converter. PE-GPT demonstrates a 22.2\% increase in
+  correctness compared to human experts. Against other
+  leading LLMs, PE-GPT shows a 35.6\% improvement in correctness and a 15.4\% enhancement in consistency, reducing
+  hallucination. Hardware experiments validate PE-GPT’s multimodal capabilities in optimizing a five-degree-of-freedom
+  modulation strategy for the DAB converter. The generalizability of PE-GPT to other PE design applications and
+  associated AI ethical considerations are also discussed. This
+  research concludes by outlining inspiring future research
+  directions, encouraging researchers to expand the boundaries
+  of the PE industry and advance toward a more intelligent era
+\end{abstract}
+
+\begin{IEEEkeywords}
+  Power inspection, multimodal large language model, high-resolution VQA, token selection, explainable AI, retrieval-augmented generation.
+\end{IEEEkeywords}
+
+\section{Introduction}
+\label{sec:introduction}
+
+\IEEEPARstart{W}{ith} the rapid integration of renewable energy and the continuous evolution toward large-scale, highly interconnected power systems, grid operation has become more dynamic and uncertain, placing higher demands on reliable Operations \& Maintenance (O\&M)~\cite{wang2020achieving}.
+Consequently, utilities increasingly rely on data-driven condition awareness and digitalized inspection to ensure secure and stable operation of diverse power equipment.
+Recent years have witnessed remarkable strides in task-specific deep learning models for power equipment condition monitoring and inspection. These advancements have been successfully applied across a broad spectrum of physical power apparatus and inspection paradigms, ranging from deep feature modeling for rotating machinery fault diagnosis~\cite{lu2023rotating} to end-to-end visual detection for transmission-line components~\cite{xie2024power} and few-shot recognition in inspection scenarios~\cite{dong2024transmission}. These studies substantiate the capability of deep models in extracting complex representations from inspection imagery, thereby laying a solid data-driven foundation for intelligent power inspection, particularly in modern inspection settings that increasingly rely on high-resolution imagery containing fine-grained visual details.
+
+However, most of these approaches follow a \emph{task-tailored} development paradigm: the model architecture, training objective, and datasets are optimized for a specific task, hindering their reuse and transfer to other inspection tasks and scenarios.
+As inspection requirements evolve toward multi-type querying and auditable decision support, this paradigm faces two fundamental limitations.
+First, increasingly fine-grained requirements proliferate specialized models, resulting in a fragmented toolchain and high end-to-end costs in data annotation, iterative development, deployment, maintenance, and version management.
+Second, task-specific models are typically designed for a narrow input--output format and lack multimodal reasoning and evidence grounding, making it difficult to fuse heterogeneous monitoring information and domain rules into coherent, auditable conclusions and actionable O\&M recommendations.
+
+Foundation models, particularly large language models (LLMs)~\cite{qwennext, guo2025deepseek} and their multimodal variants~\cite{internvl3, wang2026multimodal}, have demonstrated strong capabilities in instruction following, multimodal understanding, and reasoning, enabling a general-purpose and prompt-driven interface for a wide range of downstream tasks in vertical domains such as healthcare~\cite{medllm, medllm2} and finance~\cite{finalllm, finllm2}.
+Inspired by these successes, industry practitioners and researchers are increasingly motivated to adapt MLLMs for power systems to alleviate human workload and achieve highly intelligent fault diagnosis~\cite{powerllava, pegpt}. Yet, transitioning from general-purpose interactions to mission-critical power inspection is fraught with obstacles. Directly deploying generic MLLMs remains non-trivial due to the following domain-specific characteristics:
+\begin{enumerate}
+  \item \textit{Challenge 1 -- Limited power-domain correctness and regulatory compliance.}
+    Power O\&M is governed by strict operational regulations and domain-specific criteria such as  equipment structures, defect taxonomies, and handling procedures.
+    Generic MLLMs trained on open-domain corpora often lack such grounded expertise, which may lead to non-compliant, non-auditable, or inconsistent conclusions.
+
+  \item \textit{Challenge 2 -- Physical erasure of micro-evidence in image caused by rigid global scaling.}
+    To accommodate predefined vision encoders, mainstream MLLMs rigidly resize inputs to a fixed size such as $336\times336$. However, critical defects in 4K power panoramas often occupy $<1\%$ of the image. This naive global downsampling inevitably causes the irreversible physical erasure of such micro-evidence at the input stage, rendering the model fundamentally blind to fine-grained faults regardless of its downstream reasoning capabilities.
+
+  \item \textit{Challenge 3 -- Inefficient processing of high-resolution inspection imagery.}
+    Power monitoring images are typically high-resolution with dominant background redundancy, while informative evidence is sparse.
+    Naively encoding the full image produces excessive visual tokens, incurring high latency and memory cost and introducing noisy evidence attribution.
+
+\end{enumerate}
+
+To systematically overcome the aforementioned hurdles, we develop \textbf{PowerBrain}, a domain-specialized MLLM framework that harmonizes deployment-oriented evidence mining with robust knowledge grounding.
+
+Specifically, to tackle \textit{Challenge 1}, we perform supervised instruction tuning (SFT) on power-oriented data and integrate citation-grounded retrieval-augmented generation (RAG). By retrieving explicit regulatory snippets, PowerBrain ensures that its diagnostic conclusions are professionally correct and strictly auditable.
+To resolve \textit{Challenge 2}, we introduce the \textbf{Adaptive Resolution Escort Paradigm (AREP)}, which utilizes a recall-oriented ROI proposal module to bypass rigid global scaling. Instead of downsampling the entire panorama, AREP actively routes high-resolution perception budgets to critical regions, effectively preventing the irreversible physical erasure of micro-evidence.
+Finally, to address \textit{Challenge 3}, we propose \textbf{Coherent Topological Selection (CTS)}---a coverage-aware, instruction-guided token selection strategy that prunes visual redundancy under a fixed budget $K$. Unlike naive pruning, CTS explicitly preserves evidence continuity along elongated power assets, thereby stabilizing reasoning while minimizing computational and memory overhead .
+We instantiate the coarse proposal stage with a line-guided prior for transmission-line inspection and further validate PowerBrain's extensibility on non-line tasks, such as disconnect-switch state recognition and meter OCR, via a consistent VQA interface.
+
+The main contributions of this paper are summarized as follows:
+\begin{enumerate}
+  \item We develop PowerBrain, a domain-adapted MLLM framework tailored for power inspection. By synergizing domain-oriented instruction tuning with citation-grounded knowledge augmentation, it enables unified modeling and auditable reasoning for diverse power VQA tasks.
+
+  \item We propose AREP module to resolve the physical erasure of micro-evidence caused by rigid global scaling. By dynamically routing high-resolution perception budgets to proposed ROIs, it ensures that fine-grained defects are preserved at the input stage, significantly improving the recall of micro-scale faults.
+
+  \item We design CTS module, a coverage-aware token selection strategy that handles the computational inefficiency of high-resolution imagery. Unlike naive pruning, CTS explicitly preserves the spatial continuity and topological structure of thin, elongated assets, thereby stabilizing reasoning while minimizing inference overhead.
+
+  \item We establish a comprehensive evaluation protocol and a high-resolution benchmark derived from real-world power monitoring data. Systematic validation demonstrates that PowerBrain achieves state-of-the-art diagnostic performance while delivering substantial dividends in terms of latency and memory efficiency.
+\end{enumerate}
+
+The remainder of this paper is organized as follows.
+~\secref{sec:problem} presents the problem formulation and background.
+~\secref{sec:method} introduces the proposed PowerBrain framework and its key evidence-mining modules, including AREP and CTS.
+~\secref{sec:domain_adapt} describes the domain adaptation and knowledge augmentation strategy.
+~\secref{sec:experiments} reports the experimental settings, comparative results, and ablation studies.
+Finally, \secref{sec:conclusion} concludes the paper and discusses future work.
+
+\section{Problem Formulation and Preliminaries}
+\label{sec:problem}
+
+% \lmx{两个D，在公式里面看不清楚}
+
+\subsection{Overall Objective}
+\label{sec:overall_objective}
+
+Power inspection systems often operate under strict deployment constraints,
+including limited latency and GPU memory budgets. Consequently, the model
+must balance diagnostic accuracy with computational cost.
+We model this requirement as learning a query-conditioned multimodal decision function under an inference budget as indicated by Eq.~\eqnref{eq:overall_obj}.
+\begin{equation}
+  \begin{aligned}
+    \min_{\theta,\,\pi\in\Pi}\ \ &
+    \mathbb{E}_{(I,q,a^\star)\sim\mathcal{D}}
+    \Big[\ell\big(\mathcal{F}_{\theta}(I,q,D;\pi),\,a^\star\big)\Big] \\
+    \text{s.t.}\ \ &
+    C(\pi; I,q) \le \tau,
+  \end{aligned}
+  \label{eq:overall_obj}
+\end{equation}
+where $(I,q,a^\star)\sim\mathcal{D}$ denotes an image--query pair $(I, q)$ with its ground-truth answer $a^\star$ sampled from the data distribution $\mathcal{D}$; $\mathcal{F}_{\theta}$ is a power-domain-adapted MLLM parameterized by $\theta$; and $D$ denotes optional retrieved evidence from a power knowledge corpus such as  regulations, defect criteria, and handling guidelines.
+
+The decision variable $\pi\in\Pi$ represents a deployment-oriented \emph{evidence policy} that controls how visual evidence is generated and selected before being presented to the MLLM.
+In this paper, we instantiate $\pi$ with a two-stage strategy consisting of (i) \emph{adaptive-resolution evidence proposal} (AREP) for budget allocation in high-resolution imagery, and (ii) \emph{coverage-aware token selection} (CTS) for query-conditioned evidence selection with continuity preservation.
+
+$C(\pi; I,q)$ denotes a deployment-oriented cost proxy induced by $\pi$
+for a given input, such as the number of processed visual tokens,
+end-to-end latency, and peak GPU memory usage.
+% Under high-resolution inspection imagery, naively encoding the full image produces a long visual token sequence (typically $N\!\propto\! HW/p^2$ for patch size $p$), and the attention-based multimodal fusion in Transformer-style models often scales as $O(N^2)$ in both computation and memory; thus, $\tau$ motivates designing $\pi$ to compress redundant visual tokens while preserving task-critical evidence.
+
+% overview 大图 双栏
+\begin{figure*}[t]
+  \centering
+  \includegraphics[width=\textwidth]{overview_all.pdf}
+  \caption{System overview of PowerBrain for high-resolution power inspection VQA. Given a human instruction and a high-resolution inspection image, the framework addresses three practical challenges, namely limited power-domain knowledge, background redundancy, and high computational cost. On the visual side, the AREP module proposes high-value regions and the CTS module prunes redundant tokens before multimodal reasoning. In parallel, a power-maintenance knowledge base supports citation-grounded retrieval of equipment information, defect taxonomies, and O\&M procedures. The resulting domain-adapted MLLM integrates visual evidence and retrieved knowledge to produce grounded diagnostic responses and actionable maintenance advice.}
+  \label{fig:overview}
+\end{figure*}
+
+\subsection{Generic Vision-Language Architecture for VQA}
+\label{sec:vqa}
+
+We consider a standard multimodal architecture for VQA task consisting of a vision
+encoder $\phi(\cdot)$, a vision-language connector $\psi(\cdot)$, and an
+autoregressive language decoder $G_\theta(\cdot)$.
+Given an image $I$ and a query $q$, the vision encoder extracts a sequence of
+visual tokens $V=\phi(I)=\{v_i\}_{i=1}^{N}$, while the query is tokenized as
+$T=\mathrm{Tok}(q)=\{t_j\}_{j=1}^{M}$.
+The connector aligns and fuses the visual and textual representations to
+produce multimodal features $Z=\psi(V,T)$, based on which the decoder
+generates the answer $a = G_{\theta}(q,Z)$, corresponding to the conditional
+distribution $p_{\theta}(a\mid q,Z)$.
+
+Many connector-decoder architectures also expose query-to-vision attention
+patterns that provide a natural signal for identifying question-relevant
+visual evidence. Let $A \in \mathbb{R}^{M\times N}$ denote the aggregated
+attention from textual tokens to visual tokens, where larger $A_{j,i}$
+indicates stronger relevance between $t_j$ and $v_i$. In practice, $A$
+can be obtained by averaging attention weights across heads and, when needed,
+across upper layers for improved stability.
+However, directly applying this generic pipeline to high-resolution power
+inspection remains challenging due to several domain-specific constraints,
+which are discussed next.
+
+\subsection{Power-Inspection Constraints: Background Redundancy and Evidence Continuity}
+\label{sec:power_constraints}
+
+As discussed in~\secref{sec:introduction}, high-resolution power inspection VQA poses two practical constraints.
+First, inspection images usually contain large areas of visually uninformative background, whereas fault evidence often occupies only a small portion of the scene.
+Directly encoding the full image therefore incurs substantial computational cost while diluting question-relevant cues.
+Second, many inspection targets, such as conductors, insulator strings, and equipment boundaries, exhibit elongated or structured spatial layouts.
+The evidence relevant to a question is often distributed along these structures rather than concentrated in a compact region, so aggressive relevance-only pruning may fragment critical cues and weaken downstream reasoning.
+
+These characteristics imply that an effective deployment-oriented VQA system should not only reduce redundant visual computation, but also preserve spatially coherent evidence under limited latency and memory budgets.
+Consequently, Section~\ref{sec:method} introduces an efficient evidence mining architecture for high-resolution power inspection, while Section~\ref{sec:domain_adapt} further presents domain adaptation and knowledge grounding to improve power-domain correctness and reliability.
+
+\section{Efficient Evidence Mining for High-Resolution Power VQA}
+\label{sec:method}
+
+\subsection{Framework Overview}
+\label{sec:method_overview}
+
+As illustrated in Fig.~\ref{fig:overview}, we instantiate the evidence policy $\pi$ in Eq.\eqnref{eq:overall_obj} as a coarse-to-fine evidence mining pipeline, to enable budgeted high-resolution VQA for power inspection.
+Given an input image $I$ and a query $q$, we first apply \emph{Adaptive Resolution Evidence Proposal} (AREP), $\pi_{\text{are}}$, to allocate visual computation non-uniformly and generate a compact multi-resolution token stream $V_{\text{are}}$ that preserves global context while emphasizing high-information regions.
+Then, \emph{Coverage-aware Token Selection} (CTS), $\pi_{\text{cts}}$, uses query-conditioned attention signals to select a budgeted token subset $V_{\pi}$ with $|V_{\pi}|\le K$, while enforcing continuity-aware coverage for structured evidence.
+The selected tokens are fed into the MLLM for answer generation, optionally augmented with retrieved domain evidence $D$.
+In parallel, the proposal and selection stages preserve spatial evidence that can be visualized as an interpretable trace of the decision process, thereby supporting auditing in practical inspection workflows.
+
+The AREP and CTS modules are detailed in Sec.~\ref{sec:arep} and Sec.~\ref{sec:cts}, respectively.
+Domain adaptation and knowledge grounding, including instruction tuning and citation-grounded RAG, are described in Sec.~\ref{sec:domain_adapt}.
+
+% ------------- 这里开始是AREP相关的内容
+\subsection{Adaptive Resolution Evidence Proposal (AREP)}
+\label{sec:arep}
+
+AREP performs query-agnostic, image-level evidence proposal by allocating high-resolution perception budgets to regions with high estimated information density such as structural or gradient energy on a low-resolution proxy. This importance-weighted sampling reduces redundant computation while preserving fine-grained visual evidence. The overall module is illustrated in \figref{fig:arep_module}. In contrast, CTS is a query-conditioned, token-level, selection strategy introduced in~\secref{sec:cts}.
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=0.98\columnwidth]{AREP.pdf}
+  \caption{Illustration of the proposed Adaptive Resolution Evidence Proposal (AREP) module. A low-resolution proxy branch preserves global context and supports lightweight region scoring, after which the top-ranked regions are mapped back to the original high-resolution image for local refinement. The global and local visual tokens are finally concatenated to form the multi-resolution representation delivered to CTS.}
+  \label{fig:arep_module}
+\end{figure}
+
+% --------------- AREP第一段
+\subsubsection{AREP Formulation}
+\label{sec:arep_formulation}
+
+Given a high-resolution image $I \in \mathbb{R}^{H \times W \times 3}$, AREP is formulated through four explicit operations: proxy construction, candidate-region generation, proxy-to-original mapping, and budgeted region selection.
+
+First, a low-cost proxy image is constructed as Eq.~\eqref{eq:proxy}
+\begin{equation}
+  \tilde I = \mathcal{D}(I), \qquad \tilde I\in\mathbb{R}^{\tilde H\times\tilde W\times 3},
+  \label{eq:proxy}
+\end{equation}
+where $\mathcal{D}(\cdot)$ denotes a downsampling operator.
+The proxy image is partitioned into $M_0$ candidate regions:
+\begin{equation}
+  \mathcal{P}=\{P_m\}_{m=1}^{M_0}.
+\end{equation}
+Each $P_m$ is defined in proxy coordinates and corresponds to a high-resolution crop in the original image through coordinate scaling and boundary expansion.
+Let the scale factors be $s_h=H/\tilde H$ and $s_w=W/\tilde W$.
+For each candidate region, we define
+\begin{equation}
+  B_m=\mathcal{W}(P_m; s_h,s_w,\epsilon),
+  \label{eq:arep_mapping}
+\end{equation}
+where $\mathcal{W}(\cdot)$ maps $P_m$ to the original image and expands its boundary by ratio $\epsilon$.
+
+Second, each candidate region is assigned an importance score
+\begin{equation}
+  g(P_m \mid \tilde I)\in\mathbb{R}_{+},
+\end{equation}
+and an estimated visual cost $c_m$.
+In implementation, $c_m$ corresponds to the token/computation cost of encoding the resized crop from $B_m$.
+Let $z_m\in\{0,1\}$ denote whether region $m$ is selected.
+AREP is then written as the budget-constrained selection problem
+\begin{equation}
+  \max_{\{z_m\}_{m=1}^{M_0}}
+  \sum_{m=1}^{M_0} z_m\, g(P_m \mid \tilde I)
+  \quad
+  \mathrm{s.t.}
+  \quad
+  \sum_{m=1}^{M_0} z_m\, c_m \le \tau_{\mathrm{vis}}.
+  \label{eq:arep_budget}
+\end{equation}
+This objective states that AREP should maximize retained evidence value under a fixed visual budget.
+When all selected crops are resized to the same canonical resolution, $c_m$ is approximately constant and Eq.~\eqref{eq:arep_budget} reduces to selecting top-scoring regions under a crop-count budget, which directly matches the practical Top-$M$ procedure in \secref{sec:arep_solution}.
+
+% ------- AREP 第二段
+\subsubsection{Practical Solution via Budgeted Foveated Approximation}
+\label{sec:arep_solution}
+
+Directly solving Eq.~\eqref{eq:arep_budget} for fine-grained region-level allocation is unnecessary for practical deployment, as a coarse budgeted approximation is sufficient to preserve critical evidence while avoiding the overhead of exact region-wise optimization.
+Instead, we adopt a budgeted foveated approximation with two stages: a global low-resolution pass for preserving scene-level context, followed by a small number of local high-resolution refinements for recovering fine-grained evidence.
+
+In practical deployment, we directly reuse the proxy image and candidate-region set defined in \secref{sec:arep_formulation}, rather than restating the full construction.
+The proxy branch plays two roles simultaneously: (i) providing a low-cost global representation for scene-level context, and (ii) supporting lightweight region scoring before expensive high-resolution refinement is triggered.
+
+For each candidate region $P_m$, we compute a heuristic importance score on the proxy image.
+In the current implementation, the score is defined by the average structural energy within the region:
+\begin{equation}
+  g(P_m \mid \tilde I)
+  =
+  \frac{1}{|P_m|}
+  \sum_{(x,y)\in P_m}
+  \|\nabla \tilde I(x,y)\|_2^2,
+  \label{eq:gm}
+\end{equation}
+where $\nabla \tilde I(x,y)$ denotes the image gradient at location $(x,y)$, and $|P_m|$ is the number of pixels in region $P_m$.
+This score favors regions with rich local structures while suppressing visually smooth background areas, thereby providing a lightweight proxy for visual evidence density.
+
+Based on the regional scores $\{g(P_m\mid \tilde I)\}_{m=1}^{M_0}$, the candidate regions are ranked in descending order, and the top-$M$ regions are retained under a predefined crop budget:
+\begin{equation}
+  \mathcal{R}=\operatorname{TopM}\Big(\{g(P_m\mid \tilde I)\}_{m=1}^{M_0}\Big),
+  \label{eq:topm}
+\end{equation}
+where $\mathcal{R}$ denotes the set of selected regions.
+Each selected region is then mapped back to the original image and expanded by a margin ratio $\epsilon$ to conservatively preserve local context and avoid truncating evidence near region boundaries.
+
+AREP maintains a global low-resolution branch and a local high-resolution refinement branch.
+The global branch encodes the proxy image as
+\begin{equation}
+  V^{g}=\phi(\tilde I),
+  \label{eq:vg}
+\end{equation}
+which serves as a compact scene-level representation.
+For each refined region $R_j\in\mathcal{R}$, the corresponding image crop is resized to a canonical high-resolution scale and encoded by the vision encoder.
+This yields the local token sequence
+\begin{equation}
+  V^{l}=\operatorname{Concat}\big(\{\phi(I_{R_j})\}_{j=1}^{|\mathcal{R}|}\big),
+  \label{eq:vl}
+\end{equation}
+where $I_{R_j}$ denotes the resized crop associated with region $R_j$.
+Finally, the AREP output is formed as
+\begin{equation}
+  V_{\mathrm{are}}=\operatorname{Concat}(V^{g},V^{l}),
+  \label{eq:vare_final}
+\end{equation}
+which is subsequently passed to CTS for query-conditioned token selection.
+Algorithm~\ref{alg:arep} summarizes the overall procedure.
+
+\begin{algorithm}[t]
+  \caption{Adaptive Resolution Evidence Proposal (AREP)}
+  \label{alg:arep}
+  \begin{algorithmic}[1]
+    \Require High-resolution image $I$; candidate region set $\mathcal{P}=\{P_m\}_{m=1}^{M_0}$ on the proxy image; crop budget $M$; expansion ratio $\epsilon$
+    \Ensure Multi-resolution visual representation $V_{\mathrm{are}}$; selected region set $\mathcal{R}$
+
+    \State Construct proxy image $\tilde I \gets \mathcal{D}(I)$
+    \State Obtain global low-resolution tokens $V^{g} \gets \phi(\tilde I)$
+    \For{each candidate region $P_m \in \mathcal{P}$}
+    \State Compute structural-energy score $g_m \gets g(P_m \mid \tilde I)$
+    \EndFor
+    \State Rank $\{P_m\}_{m=1}^{M_0}$ in descending order of $\{g_m\}_{m=1}^{M_0}$
+    \State Select the top-$M$ regions to form $\mathcal{R}$
+    \State Initialize $V^{l} \gets \emptyset$
+    \For{each selected region $R_j \in \mathcal{R}$}
+    \State Map $R_j$ from proxy coordinates to the original image
+    \State Expand $R_j$ by margin ratio $\epsilon$
+    \State Crop the corresponding image patch from $I$
+    \State Resize the crop to short-side $S_{\mathrm{high}}$ to obtain $I_{R_j}$
+    \State Update $V^{l} \gets \operatorname{Concat}(V^{l}, \phi(I_{R_j}))$
+    \EndFor
+    \State Set $V_{\mathrm{are}} \gets \operatorname{Concat}(V^{g}, V^{l})$
+    \State \Return $V_{\mathrm{are}}, \mathcal{R}$
+  \end{algorithmic}
+\end{algorithm}
+
+\subsubsection{Complexity and Deployment Considerations}
+\label{sec:arep_complexity}
+
+AREP is designed as a lightweight front-end evidence proposal module for deployment-oriented high-resolution inspection.
+Its practical cost is characterized from three complementary aspects.
+
+First, we define the \emph{AREP overhead} as the additional front-end inference time introduced by proxy construction, regional scoring, ranking, and crop refinement:
+\begin{equation}
+  T_{\mathrm{AREP}}
+  =
+  T_{\mathrm{proxy}}
+  +
+  T_{\mathrm{score}}
+  +
+  T_{\mathrm{select}}
+  +
+  T_{\mathrm{crop}}.
+  \label{eq:t_arep}
+\end{equation}
+
+Second, we characterize the \emph{effective visual computation cost} by the visual tokens retained after AREP, written as
+\begin{equation}
+  C_{\mathrm{vis}} = |V_{\mathrm{are}}|,
+  \label{eq:c_vis}
+\end{equation}
+which is equivalently controlled in practice by the crop budget $M$ and the resolution of selected local regions.
+
+Third, from a system-level deployment perspective, we report the end-to-end latency and peak GPU memory usage:
+\begin{equation}
+  (T_{\mathrm{e2e}},\, M_{\mathrm{peak}}),
+  \label{eq:deploy_metrics}
+\end{equation}
+which directly reflect practical feasibility in industrial scenarios.
+
+These metrics provide a unified basis for evaluating whether the visual evidence preserved by AREP justifies its additional front-end cost. The corresponding quantitative results are reported in Sec.~\ref{sec:experiments}.
+
+% ------------- 这里是AREP内容的结束
+
+\subsection{Coverage-Aware Token Selection (CTS)}
+\label{sec:cts}
+
+While AREP performs query-agnostic evidence allocation at the image level, the resulting multi-resolution token stream may still contain substantial redundancy for downstream reasoning. CTS therefore acts as a second-stage, query-conditioned selector at the token level. Given a user instruction and AREP output $V_{\mathrm{are}}$, CTS aims to keep only a compact subset of tokens that preserves both (i) semantic relevance to the query and (ii) spatial continuity along elongated power assets.
+
+\subsubsection{CTS Formulation}
+\label{sec:cts_formulation}
+
+Let the AREP output be
+\[
+  V_{\mathrm{are}}=\{v_i\}_{i=1}^{N},
+\]
+where each token $v_i$ is associated with a spatial coordinate $p_i\in\mathbb{R}^2$ on the image plane (obtained by mapping patch/crop locations back to image coordinates).
+For local-crop tokens, patch coordinates are first defined in crop space and then mapped back to the original image plane through the crop-to-image transform, so that global and local tokens share a common spatial reference.
+Given the query token sequence $T=\{t_j\}_{j=1}^{M}$, we aggregate query-to-vision cross-attention as
+\begin{equation}
+  A_{j,i}=\frac{1}{|\mathcal{L}_a|\,H}
+  \sum_{\ell\in\mathcal{L}_a}\sum_{h=1}^{H}
+  \operatorname{Attn}^{(\ell,h)}(t_j\!\rightarrow\! v_i),
+  \label{eq:cts_attn}
+\end{equation}
+where $\mathcal{L}_a$ is a selected set of upper multimodal layers and $H$ is the number of attention heads.
+In practice, these attention signals are extracted from a lightweight multimodal scoring pass over the AREP-compressed token stream, after which only the selected subset is retained for subsequent answer generation.
+The token importance score is then defined as
+\begin{equation}
+  s_i=\sum_{j=1}^{M} w_j A_{j,i},
+  \qquad w_j\ge 0,\ \sum_{j=1}^{M}w_j=1,
+  \label{eq:cts_score}
+\end{equation}
+with uniform $w_j=1/M$ in our default setting.
+
+To encode continuity, CTS partitions tokens into ordered strips along a principal axis $u\in\mathbb{R}^2$ (estimated from token coordinates by PCA):
+\begin{equation}
+  \begin{aligned}
+    r_i &= u^\top p_i,\\
+    \Delta &= \frac{r_{\max}-r_{\min}}{B},\\
+    \Omega_b &= \Big\{i\ \big|\ r_i\in\left[r_{\min}+(b-1)\Delta,\ r_{\min}+b\Delta\right)\Big\},\\
+    &\qquad b=1,\ldots,B.
+  \end{aligned}
+  \label{eq:cts_partition}
+\end{equation}
+When the token layout does not exhibit a stable dominant direction, CTS falls back to a default horizontal image axis, thereby degenerating to coverage-aware spatial sampling instead of relying on a line-specific prior.
+Let $z_i\in\{0,1\}$ denote whether token $v_i$ is selected. CTS is formulated as
+\begin{equation}
+  \begin{aligned}
+    \max_{\{z_i\}_{i=1}^{N}}\quad
+    &\sum_{i=1}^{N} z_i\, s_i,\\
+    \mathrm{s.t.}\quad
+    &\sum_{i=1}^{N} z_i \le K,\\
+    &\sum_{i\in\Omega_b} z_i \ge k_b,\qquad b=1,\ldots,B.
+  \end{aligned}
+  \label{eq:cts_opt}
+\end{equation}
+with feasibility condition $\sum_{b=1}^{B}k_b\le K$.
+The final CTS output is
+\begin{equation}
+  V_{\mathrm{cts}}=\{v_i\in V_{\mathrm{are}}\mid z_i=1\},
+  \label{eq:vcts}
+\end{equation}
+which is passed to the MLLM for answer generation.
+
+\subsubsection{Practical Solution Algorithm}
+\label{sec:cts_solution}
+
+Directly solving the discrete problem in \eqnref{eq:cts_opt} is unnecessary in practice.
+We therefore adopt a lightweight two-stage greedy approximation that enforces coverage first and fills the remaining budget by global relevance.
+
+First, we compute relevance scores $\{s_i\}$ using \eqnref{eq:cts_attn} and \eqnref{eq:cts_score}, and build strips $\{\Omega_b\}$ via \eqnref{eq:cts_partition}.
+Then, CTS performs coverage-aware selection in two stages:
+\begin{equation}
+  \begin{aligned}
+    \mathcal{S}_b
+    &= \operatorname{Top}_{\min(k_b,|\Omega_b|)}\big(\{s_i\mid i\in\Omega_b\}\big),\\
+    &\qquad b=1,\ldots,B,\\
+    \mathcal{S}
+    &= \bigcup_{b=1}^{B}\mathcal{S}_b,\\
+    \bar{\mathcal{S}}
+    &= \{1,\ldots,N\}\setminus\mathcal{S},\\
+    \hat{\mathcal{S}}
+    &= \operatorname{Top}_{K-|\mathcal{S}|}\big(\{s_i\mid i\in\bar{\mathcal{S}}\}\big).
+  \end{aligned}
+  \label{eq:cts_stage}
+\end{equation}
+Finally, $\mathcal{S}\leftarrow\mathcal{S}\cup\hat{\mathcal{S}}$, and the selected tokens are returned as
+\begin{equation}
+  V_{\mathrm{cts}}=\{v_i\in V_{\mathrm{are}}\mid i\in\mathcal{S}\}.
+  \label{eq:vcts_sol}
+\end{equation}
+This procedure has complexity dominated by sorting (approximately $O(N\log N)$), making CTS suitable for real-time deployment.
+Algorithm~\ref{alg:cts} summarizes the complete process.
+
+\begin{algorithm}[t]
+  \caption{Coverage-Aware Token Selection (CTS)}
+  \label{alg:cts}
+  \begin{algorithmic}[1]
+    \Require AREP tokens $V_{\mathrm{are}}=\{v_i,p_i\}_{i=1}^{N}$; query tokens $T=\{t_j\}_{j=1}^{M}$; budget $K$; strip number $B$; strip quotas $\{k_b\}_{b=1}^{B}$
+    \Ensure Selected token subset $V_{\mathrm{cts}}$
+
+    \State Compute aggregated attention $A$ by \eqnref{eq:cts_attn}
+    \State Compute token scores $s_i$ by \eqnref{eq:cts_score}
+    \State Estimate principal axis $u$ from $\{p_i\}_{i=1}^{N}$ and build strips $\{\Omega_b\}_{b=1}^{B}$ by \eqnref{eq:cts_partition}
+    \State Initialize $\mathcal{S}\gets\emptyset$
+    \For{$b=1$ to $B$}
+    \State Select $\mathcal{S}_b\gets \operatorname{Top}_{\min(k_b,|\Omega_b|)}(\{s_i\mid i\in\Omega_b\})$
+    \State Update $\mathcal{S}\gets\mathcal{S}\cup\mathcal{S}_b$
+    \EndFor
+    \State Set $\bar{\mathcal{S}}\gets\{1,\ldots,N\}\setminus\mathcal{S}$
+    \State Select $\hat{\mathcal{S}}\gets \operatorname{Top}_{K-|\mathcal{S}|}(\{s_i\mid i\in\bar{\mathcal{S}}\})$
+    \State Update $\mathcal{S}\gets\mathcal{S}\cup\hat{\mathcal{S}}$
+    \State Set $V_{\mathrm{cts}}\gets\{v_i\in V_{\mathrm{are}}\mid i\in\mathcal{S}\}$
+    \State \Return $V_{\mathrm{cts}}$
+  \end{algorithmic}
+\end{algorithm}
+
+\section{Domain Adaptation and Knowledge Augmentation}
+\label{sec:domain_adapt}
+
+While Section~\ref{sec:method} focuses on efficient evidence mining for high-resolution power VQA, achieving domain-correct and reliable responses further requires adapting the foundation MLLM to power-system terminology, task formats, and operational knowledge. To this end, we construct power-oriented instruction data from real monitoring scenarios and perform supervised instruction tuning on an open-source MLLM. Moreover, we integrate citation-grounded retrieval-augmented generation (RAG) to incorporate power regulations and defect criteria, enabling traceable knowledge grounding in the generated answers.
+
+\subsection{Power-Oriented Instruction Data Construction}
+\label{sec:data_construction}
+As illustrated in Fig.~\ref{fig:data_pipeline}, we construct the power-oriented instruction corpus through a lightweight semi-automatic pipeline. We first collect heterogeneous sources, including monitoring images, textual materials, and auxiliary data, and then use expert-designed prompts to guide GPT-4V/GPT-4o for data generation. A subsequent quality-assessment and feedback stage is applied to filter noisy outputs and refine the generated samples. The final corpus is organized into image--instruction--response triplets for downstream instruction tuning. The composition of the corpus is summarized in Table~\ref{tab:instruction_stats}.
+
+\begin{table}[!b]
+  \centering
+  \caption{Composition of the power-oriented instruction corpus used for SFT.}
+  \label{tab:instruction_stats}
+  \footnotesize
+  \setlength{\tabcolsep}{0pt}
+  \renewcommand{\arraystretch}{1.12}
+  \begin{tabular*}{\columnwidth}{@{\extracolsep{\fill}}>{\raggedright\arraybackslash}m{1.76cm}>{\raggedright\arraybackslash}m{4.48cm}>{\centering\arraybackslash}m{0.78cm}@{}}
+    \toprule
+    Subset & Main supervision focus & \#Inst. \\
+    \midrule
+    \makecell[l]{Detailed\\descriptions} & Fine-grained visual grounding of equipment, states, and spatial relations & 45k \\
+    \addlinespace[0.5ex]
+    \makecell[l]{Multi-turn\\dialogues} & Context-aware interaction across consecutive user queries & 22k \\
+    \addlinespace[0.5ex]
+    \makecell[l]{In-depth\\reasoning/QA} & Evidence-to-decision supervision for diagnosis, severity assessment, and O\&M recommendation & 33k \\
+    \midrule
+    Total & -- & 100k \\
+    \bottomrule
+  \end{tabular*}
+\end{table}
+
+\begin{figure*}[!t]
+  \centering
+  \includegraphics[width=\textwidth]{data_gen.pdf}
+  \caption{Overview of the power-oriented instruction data construction pipeline.}
+  \label{fig:data_pipeline}
+\end{figure*}
+
+\subsection{Domain Adaptation via Supervised Instruction Tuning}
+\label{sec:sft}
+We instantiate domain adaptation on the Qwen3-VL-4B backbone and fine-tune it on the power-oriented image--instruction--response triplets constructed in Sec.~\ref{sec:data_construction}. For each training sample, the image and instruction are provided as the condition, and the model is optimized with teacher forcing to maximize the likelihood of the target response. We keep the prompt format consistent with downstream inference so that the learned behavior transfers directly to deployment-time VQA. This stage injects power-domain terminology, question formats, and answer patterns into the model parameters; the exact optimizer and schedule are reported in Sec.~\ref{sec:exp_settings}.
+
+\subsection{Knowledge Augmentation with Citation-Grounded RAG}
+\label{sec:rag}
+To further improve correctness on regulation-sensitive questions, we build a power-domain knowledge base from regulations, defect criteria, and handling guidelines. At inference time, the current query is used to retrieve a small set of relevant passages, which are inserted into the prompt as indexed evidence snippets together with the image and question. The MLLM is then instructed to generate its answer by grounding the judgment on the retrieved evidence and to return the corresponding citation indices. As a result, the final response is not only more accurate but also auditable, because the answer can be traced back to the exact evidence presented to the model.
+
+\begin{table*}[t]
+  \centering
+  \caption{Overall benchmark performance and deployment-oriented efficiency. \emph{Latency} is measured as end-to-end time per question (ms/q) on a single NVIDIA A100 GPU using BF16 precision; \emph{Tokens} reports effective visual tokens processed by the MLLM (from original $N$ to pruned $K$).}
+  \label{tab:main_results}
+
+  % 定义专业学术蓝
+  \definecolor{tableblue}{RGB}{232, 240, 250}
+  \renewcommand{\arraystretch}{1.3}
+  \small
+
+  % 使用 tabular* 并设置宽度为 0.95\textwidth，所有列使用 c 居中
+  \begin{tabular*}{0.98\textwidth}{@{\extracolsep{\fill}} *{11}{c} @{}}
+    \toprule
+    \textbf{Model} & \textbf{Type} & \textbf{Params} & \textbf{Acc.} & \textbf{Percep.} & \textbf{Reason.} & \textbf{Action} & \textbf{Latency} & \textbf{Tokens} & \textbf{Peak Mem.} & \textbf{Tag} \\
+    & & \textbf{(B)} & \textbf{(\%)} & \textbf{(\%)} & \textbf{(\%)} & \textbf{(\%)} & \textbf{(ms/q)} & \textbf{($N \!\rightarrow\! K$)} & \textbf{(GB)} & \\
+    \midrule
+
+    % 闭源模型组 - 加上 @{} 彻底消除色块溢出
+    \rowcolor{tableblue} \multicolumn{11}{c}{\textit{Closed-source MLLMs}} \\
+    GPT-4o & Closed & -- & 76.1 & 79.4 & 78.5 & 70.4 & -- & -- & -- & API \\
+    Gemini-2.5-Pro & Closed & -- & 77.4 & 80.1 & 78.9 & 73.2 & -- & -- & -- & API \\
+    \midrule
+
+    % 开源模型组 - 加上 @{} 彻底消除色块溢出
+    \rowcolor{tableblue} \multicolumn{11}{c}{\textit{Open-source MLLMs}} \\
+    Qwen3-VL-4B & Open & 4.4 & 49.7 & 52.1 & 51.8 & 45.2 & 850 &  4096 & 12.2 & Full-res \\
+    Qwen3-VL-8B & Open & 8.2 & 55.3 & 58.7 & 57.3 & 49.9 & 1320 &  4096 & 20.5 & Full-res \\
+    InternVL3-4B & Open & 4.2 & 50.2 & 52.6 & 51.9 & 46.1 & 880 &  4096 & 11.9 & Full-res \\
+    InternVL3-8B & Open & 7.6 & 57.8 & 59.2 & 58.8 & 55.4 & 1410 &  4096 & 21.2 & Full-res \\
+    LLaVA-1.5-8B & Open & 7.8 & 43.3 & 46.4 & 45.7 & 37.8 & 1380 &  4096 & 19.8 & Full-res \\
+    \midrule
+
+    % 我们的方案组 - 加上 @{} 彻底消除色块溢出
+    \rowcolor{tableblue} \multicolumn{11}{c}{\textit{Ours / Variants (Backbone: Qwen3-VL-4B)}} \\
+    \textbf{PowerBrain} & Ours & 4.4 & 73.6 & 76.8 & 75.3 & 68.7 & \textbf{320} & 4096 $\rightarrow$ \textbf{256} & \textbf{8.2} & \textbf{Full} \\
+    \quad w/o AREP & Ours & 4.4 & 69.8 & 72.2 & 71.6 & 65.6 & 450 & 4096 $\rightarrow$ 256 & 9.4 & No-ROI \\
+    \quad w/o CTS (Top-$K$) & Ours & 4.4 & 70.9 & 73.5 & 72.1 & 67.1 & 315 & 4096 $\rightarrow$ 256 & 8.1 & Top-$K$ \\
+    \quad w/o RAG & Ours & 4.4 & 64.2 & 67.8 & 65.6 & 59.2 & 320 & 4096 $\rightarrow$ 256 & 8.2 & No-RAG \\
+    \quad w/o SFT & Ours & 4.4 & 66.8 & 69.1 & 67.4 & 63.9 & 320 & 4096 $\rightarrow$ 256 & 8.2 & No-SFT \\
+    \midrule
+
+    % 底部注释，左对齐不受影响
+    \multicolumn{11}{l}{\scriptsize \textit{Note: Closed-source models were evaluated using the latest available APIs as of December 2025. All tests used BF16 precision.}} \\
+    \bottomrule
+  \end{tabular*}
+\end{table*}
+
+\section{Experiments}
+\label{sec:experiments}
+
+\subsection{Experimental Settings}
+\label{sec:exp_settings}
+
+PowerBrain is instantiated on the Qwen3-VL-4B backbone~\cite{qwen3} and implemented with PyTorch and the Hugging Face Transformers library. Supervised instruction tuning is conducted on a server with 16 NVIDIA A100 80GB GPUs using BF16 mixed precision and gradient checkpointing. Unless otherwise specified, we optimize with AdamW, learning rate $2\times 10^{-5}$, weight decay $0.05$, global batch size $256$, and $3000$ update steps, together with a warmup ratio of $0.05$ and a cosine decay scheduler.
+
+At inference time, all compared methods are evaluated under the same MCQ-style prompt protocol, and open-source models together with PowerBrain use deterministic decoding with a maximum generation length of $5120$. We report accuracy as the primary metric, together with deployment-oriented metrics including end-to-end latency (ms/q), peak GPU memory (GB), and the effective number of visual tokens processed by the MLLM. To ensure hardware consistency, all latency and memory measurements are obtained on a single NVIDIA A100 80GB GPU in BF16 precision.
+
+Unless otherwise stated, AREP uses a two-level foveated policy with a global low-resolution pass at $S_{\text{low}}=512$ and at most $M=6$ high-resolution crops at $S_{\text{high}}=1536$ with expansion ratio $\varepsilon=0.15$. Candidate regions are generated on a $12\times 12$ proxy grid and ranked by the AREP score defined in Sec.~\ref{sec:arep}. CTS then keeps at most $K=256$ tokens by partitioning the selected regions into $B=16$ ordered strips along an estimated principal axis, with a minimum quota $k_b=1$ for each strip. All token-selection baselines are compared under the same token budget $K$ for fair efficiency evaluation.
+
+\subsection{Benchmark and Evaluation Protocol}
+\label{sec:benchmark_protocol}
+
+To evaluate both high-resolution evidence mining and cross-scenario task generality, we build a multi-task benchmark from real-world power monitoring data and O\&M requirements. The benchmark covers five representative inspection scenarios: transmission-line foreign-object inspection, disconnect-switch state recognition, meter reading, power-scene safety recognition, and insulator infrared diagnosis. All scenarios are cast into a unified MCQ-style VQA interface, and representative image/question/option styles are summarized in Table~\ref{tab:task_overview}. Among them, transmission-line foreign-object VQA serves as the primary stress test for high-resolution reasoning, because it combines corridor-scale panoramas with extremely sparse fault evidence.
+
+We organize questions using a Perception--Reasoning--Action (PRA) taxonomy.
+Perception measures visually grounded recognition of key components and cues (e.g., conductors, fittings, and foreign objects).
+Reasoning evaluates domain-conditioned judgment following power terminology and operational criteria (e.g., severity assessment and safety compliance).
+Action focuses on O\&M-oriented decisions such as abnormality confirmation, risk assessment, and actionable recommendations.
+
+To enable consistent and reproducible evaluation across heterogeneous tasks, we convert every sample into a multiple-choice question (MCQ) and instruct models to output only the option letter; option order is randomized to mitigate positional bias. This design suppresses the ambiguity of free-form generation and enables direct comparison across recognition, reasoning, and decision-oriented tasks.
+
+In its current split, the benchmark contains \textbf{3,290} image-MCQ pairs in total. The transmission-line subset exhibits a pronounced long-tail resolution distribution, peaking at \textbf{4896}$\times$\textbf{3968}; more than half of its images exceed standard 1080p, and a substantial fraction surpasses 4K UHD. Fig.~\ref{fig:res_scatter} visualizes this distribution. These statistics directly motivate AREP and CTS: dense full-image encoding is prohibitively expensive, while diagnostically relevant evidence may occupy only a very small fraction of the panorama.
+
+\begin{table}[H]
+  \centering
+  \caption{Representative sub-tasks in the PowerBrain benchmark. Listed questions and options are representative templates rather than exhaustive annotations.}
+  \label{tab:task_overview}
+  \footnotesize
+  \setlength{\tabcolsep}{0pt}
+  \renewcommand{\arraystretch}{1.1}
+  \begin{tabular*}{\columnwidth}{@{\extracolsep{\fill}}>{\raggedright\arraybackslash}p{1.42cm}>{\raggedright\arraybackslash}p{1.92cm}>{\raggedright\arraybackslash}p{4.98cm}@{}}
+    \toprule
+    Sub-task & Typical image & Representative question / options \\
+    \midrule
+    \makecell[l]{Line foreign\\object} & \makecell[l]{RGB UAV or\\patrol panoramas} & \makecell[l]{Q: What abnormality is on the corridor?\\Opt.: normal / foreign-object type / severity} \\
+    \addlinespace[0.4ex]
+    \makecell[l]{Disconnect\\switch} & \makecell[l]{RGB close-ups of\\substation switches} & \makecell[l]{Q: What is the switch state?\\Opt.: open / closed / intermediate / uncertain} \\
+    \addlinespace[0.4ex]
+    \makecell[l]{Meter\\reading} & \makecell[l]{RGB close-ups of\\analog or digital\\meters} & \makecell[l]{Q: What reading is displayed?\\Opt.: candidate readings / digit strings} \\
+    \addlinespace[0.4ex]
+    \makecell[l]{Scene\\safety} & \makecell[l]{RGB worksite or\\substation scenes} & \makecell[l]{Q: Which safety risk is present?\\Opt.: normal / violation type / risk level} \\
+    \addlinespace[0.4ex]
+    \makecell[l]{Infrared\\diagnosis} & \makecell[l]{Infrared images of\\insulators/fittings} & \makecell[l]{Q: Is the thermal pattern abnormal?\\Opt.: normal / mild / moderate / severe} \\
+    \bottomrule
+  \end{tabular*}
+\end{table}
+
+\begin{figure}
+  \centering
+  \includegraphics[width=0.95\linewidth]{resolution_dynamic_size_cloud_800dpi.png.pdf}
+  \caption{Resolution distribution of the transmission-line foreign-object subset. The long-tail concentration in high-resolution panoramas motivates deployment-oriented evidence mining instead of dense full-image encoding.}
+  \label{fig:res_scatter}
+\end{figure}
+
+\subsection{Main Results and Efficiency}
+\label{sec:main_results_efficiency}
+
+Table \ref{tab:main_results} summarizes the comparison with representative open-source MLLMs, closed-source APIs, and our ablated variants on the high-resolution power inspection benchmark. We analyze these results from two complementary perspectives: diagnostic performance and deployment-oriented efficiency.
+
+\subsubsection{Overall Diagnostic Performance}
+PowerBrain attains \textbf{73.6\%} overall accuracy on the benchmark, substantially outperforming open-source baselines of similar scale. Relative to the vanilla Qwen3-VL-4B, which uses the same 4.4B backbone, the gain is \textbf{+23.9} percentage points (73.6\% vs. 49.7\%). PowerBrain also exceeds larger 8B open-source models, improving over InternVL3-8B by \textbf{+15.8} points and over LLaVA-1.5-8B by \textbf{+30.3} points. These comparisons suggest that, for high-resolution power inspection, domain adaptation and evidence selection are more influential than parameter scaling alone.
+
+Compared with closed-source APIs, PowerBrain remains competitive despite its much smaller model size. The gap to GPT-4o and Gemini-2.5-Pro is limited to 2.5--3.8 percentage points in overall accuracy, while the \textit{Action} metric reaches \textbf{68.7\%}, close to GPT-4o (\textbf{70.4\%}). This behavior is important for industrial deployment: generalized MLLMs may recognize visual content reasonably well, but actionable O\&M decisions require domain-aligned reasoning and regulation-aware judgment, which are directly strengthened by SFT and citation-grounded RAG.
+
+\subsubsection{Deployment Efficiency and Hardware Dividends}
+The accuracy gains are obtained together with a substantial reduction in inference cost. PowerBrain reduces the effective visual token budget from \textbf{4096} to \textbf{256}, corresponding to a \textbf{93.7\%} reduction in visual tokens processed by the MLLM. This compression directly translates into lower resource consumption: peak GPU memory decreases from 12.2 GB for Qwen3-VL-4B to \textbf{8.2 GB}, i.e., a \textbf{32.7\%} reduction.
+
+Latency shows a similar trend. PowerBrain requires \textbf{320 ms/q}, compared with 850 ms/q for Qwen3-VL-4B and 1410 ms/q for InternVL3-8B, corresponding to speedups of \textbf{2.65$\times$} and \textbf{4.4$\times$}, respectively. Taken together, the results in Table \ref{tab:main_results} show that the proposed evidence-mining pipeline improves the accuracy--efficiency trade-off rather than merely shifting it, which is essential for UAV- or substation-oriented deployment under limited memory and response-time budgets.
+
+\begin{figure*}[t]
+  \centering
+  % \vspace{1cm}
+  \includegraphics[width=0.9\textwidth]{chat2_double_3.pdf}
+  \caption{Example of superior visual understanding and reasoning capability of PowerBrain in comparison to other models.  PowerBrain exhibits the ability to interpret images and instructions with a high level of professionalism. Additionally, it is capable of executing multi-round dialogues and complex reasoning tasks.}
+  \label{fig:case_example} % 引用标签
+\end{figure*}
+
+\subsection{Ablation and Scaling Analysis}
+\label{sec:ablation_scaling}
+
+While Table \ref{tab:main_results} establishes the macroscopic superiority of the PowerBrain architecture, we further conduct a series of granular ablation studies to isolate and quantify the specific contributions of our proposed modules. The following data-driven analysis deconstructs how our two-stage visual optimization (AREP and CTS) and knowledge injection paradigms (SFT and RAG) individually dictate the model's performance under varying operational constraints and physical scales.
+
+\subsubsection{AREP: Preserving Micro-Evidence}
+
+To rigorously isolate the structural preservation capabilities of the Adaptive Resolution Escort Paradigm (AREP), we construct a scale-stratified evaluation subset. Specifically, we uniformly sample 500 representative high-resolution images from the test set and categorize the target assets into three scale groups based on their relative bounding box areas: \textit{Large} ($>10\%$, e.g., transmission towers), \textit{Medium} ($1\% \sim 10\%$, e.g., insulator strings), and \textit{Micro} ($<1\%$, e.g., missing pins or hardware cracks). We then evaluate the diagnostic accuracy of the full PowerBrain pipeline against the \textit{w/o AREP} variant, which degrades to naive global downsampling.
+
+As illustrated in Fig. \ref{fig:arep_scale}, the removal of AREP triggers a highly disproportionate performance degradation across varying object scales. For Large objects, global downsampling results in a relatively moderate accuracy drop of $\Delta 5.0\%$, as macroscopic structural features remain largely discernible even at reduced resolutions. However, as the physical scale shrinks, this performance gap accelerates drastically, widening to $\Delta 9.5\%$ for Medium objects and peaking at a severe $\Delta 13.0\%$ gap for Micro objects.
+
+These results empirically validate the necessity of our proposed module. Standard global compression inevitably leads to the irreversible physical erasure of micro-evidence (often sub-10 pixels in downsampled views). In contrast, AREP successfully functions as a scale-adaptive "magnifying glass", actively routing high-resolution perception budgets to structurally dense regions and safeguarding the granular details essential for precise industrial diagnosis.
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=0.95\columnwidth]{arep_ablation_scale_clean.pdf}
+  \caption{Impact of the Adaptive Resolution Escort Paradigm (AREP) across different object scales. The bar chart illustrates the disproportionate accuracy degradation ($\Delta$) when substituting AREP with global downsampling. Micro-evidence (e.g., missing pins, $<1\%$ area) suffers a severe 13.0\% drop, validating AREP's necessity for high-fidelity structural preservation.}
+  \label{fig:arep_scale}
+\end{figure}
+
+\subsubsection{CTS: Token Selection Efficiency}
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=0.95\columnwidth]{cts_token_curve_enhanced.pdf}
+  \caption{Diagnostic accuracy across varying visual token budgets ($K$). PowerBrain equipped with CTS saturates rapidly, achieving 73.6\% accuracy at $K=256$. The explicit $\Delta 5.6\%$ gap demonstrates that CTS explicitly preserves topological continuity, whereas the Uniform Selection baseline requires $4\times$ the computational budget ($K=1024$) to reach comparable performance.}
+  \label{fig:cts_curve}
+\end{figure}
+
+To validate the informational density and feature-preserving efficiency of the Coherent Topological Selection (CTS) module, we evaluate PowerBrain across varying visual token budgets ($K$), as illustrated in Fig. \ref{fig:cts_curve}. We compare CTS against two standard baselines: Random Selection and Uniform Selection (evenly spaced extraction).
+
+As evidenced by the saturation curve in Fig. \ref{fig:cts_curve}, CTS displays profound informational compactness. It saturates the diagnostic performance much faster than its counterparts; at our operational budget of $K=\textbf{256}$ tokens, PowerBrain with CTS secures a robust 73.6\% accuracy. In stark contrast, to attain a comparable level of accuracy around 72.8\%, Uniform Selection requires a budget of $K=\textbf{1024}$ tokens—four times the computational cost of CTS. At $K=\textbf{256}$, the performance gap between CTS and Uniform Selection widens to $\Delta 5.6\%$.
+
+This data empirically validates the CTS design principle. By explicitly optimizing for physical topological continuity rather than naive spatial coverage, CTS ensures that functionally vital but geometrically delicate assets (e.g., thin insulator strings) are preserved even at extreme contextual bottlenecks. In summary, CTS converts algorithmic continuity priors directly into hardware efficiency, delivering SOTA accuracy with minimal computation.
+
+\subsubsection{SFT \& RAG: Synergistic Knowledge Injection}
+While structural perception is resolved by AREP and CTS, diagnostic reasoning requires rigorous domain alignment. We evaluate the data efficiency of our Supervised Fine-Tuning (SFT) and the necessity of Retrieval-Augmented Generation (RAG) in securing industrial compliance.
+
+First, by scaling the SFT dataset volume from 5k to 50k instruction-response pairs, we observe a rapid performance saturation. The overall accuracy climbs sharply from the zero-shot baseline and plateaus around 20k samples. This high data efficiency proves that massive pre-training on domain data is unnecessary; a highly curated, small-scale instruction set is sufficient to activate the generalized reasoning priors of the 4.4B backbone and adapt them to specific power equipment semantics.
+
+However, relying solely on parametric memory (SFT) reveals a critical bottleneck in the zero-tolerance industrial context. As indicated in Table \ref{tab:main_results}, the \textit{w/o RAG} ablation results in a catastrophic $9.5\%$ drop in the \textit{Action} metric (from $68.7\%$ down to $59.2\%$). Without RAG, the model frequently hallucinates rigid penalty clauses and operational protocols. By dynamically retrieving explicit regulatory texts (e.g., standard defect classification codes and maintenance manuals) as textual prompts, RAG grounds the MLLM's reasoning process. This synergy ensures that PowerBrain not only "sees" the defects accurately but also "judges" them in strict accordance with real-world power grid protocols, completely bridging the gap between visual diagnosis and actionable compliance.
+
+\subsection{Case Studies and Explainability}
+\label{sec:case_studies}
+
+We provide qualitative case studies to illustrate how the proposed framework produces accurate and auditable answers under challenging high-resolution power inspection scenarios.
+Our explainability is grounded on two exported evidence layers: (i) corridor-level ROIs proposed by AREP, and (ii) token-level saliency/selection maps produced by CTS, which can be projected back to image patches to visualize what the model attends to.
+
+\subsubsection{Comparative example on professional visual understanding.}
+Fig.~\ref{fig:case_example} presents representative multi-round VQA examples comparing our model with baseline MLLMs.
+The proposed model demonstrates stronger domain consistency in identifying power components and producing professional explanations, while general-purpose baselines may hallucinate non-existent objects or provide irrelevant descriptions.
+These examples highlight the benefit of power-oriented instruction tuning and knowledge grounding for reliable industrial interaction.
+
+\subsubsection{Evidence localization via ROI and token-level maps.}
+To make the decision process auditable, we visualize the corridor ROIs and token-level evidence maps for representative queries.
+AREP suppresses dominant background regions and focuses computation on physically plausible conductor corridors, whereas CTS further highlights query-relevant tokens within the corridor (e.g., fittings, insulators, foreign objects) and preserves continuity along the conductor direction.
+In contrast, Top-\(K\) selection often yields fragmented evidence concentrated in a local area, which can lead to unstable reasoning on elongated targets.
+These visualizations provide an intuitive explanation of why coverage-aware selection improves execution-oriented decisions and reduces attention drift.
+
+\subsubsection{Citation-grounded reasoning with RAG.}
+For safety-critical queries that require adherence to operational regulations, we additionally display retrieved textual evidence and the corresponding citations used in the final response.
+RAG encourages the model to ground its recommendations on explicit rules or defect-handling guidelines, improving both correctness and traceability.
+We observe that the grounded answers are more consistent across paraphrased queries and option shuffles, which is essential for online O\&M decision support.
+
+\section{Conclusion and Discussion}
+\label{sec:conclusion}
+
+This paper investigated efficient and explainable high-resolution VQA for power inspection with a domain-adapted multimodal large language model.
+Motivated by the characteristics of real-world power monitoring imagery---\emph{high resolution, dominant background redundancy, and sparse/elongated evidence along transmission corridors}---we developed a coarse-to-fine evidence mining framework that enables deployment-oriented inference under constrained computation budgets.
+
+Specifically, we proposed a recall-oriented adaptive-resolution evidence proposal (AREP) module to suppress irrelevant background and provide corridor-level evidence candidates, and a coverage-aware instruction-guided token selection (CTS) module to select query-relevant visual tokens under a token budget while preserving evidence continuity for thin and elongated targets.
+To improve domain correctness and auditability, we further performed supervised instruction tuning (SFT) on power-oriented instruction data and integrated citation-grounded retrieval-augmented generation (RAG) with power regulations and defect-handling knowledge, enabling traceable and professional responses in safety-critical scenarios.
+
+Extensive experiments on a multi-task benchmark covering transmission-line inspection, disconnect-switch state recognition, meter OCR, safety recognition, and insulator infrared diagnosis demonstrated that the proposed system achieves a favorable performance--efficiency trade-off.
+In particular, the evidence mining pipeline substantially reduces effective visual token consumption and deployment costs (latency and memory) without sacrificing accuracy, while ablation and scaling analyses verified the functional roles of AREP, continuity-aware selection, SFT, and RAG.
+Qualitative case studies further illustrated that the exported ROI- and token-level evidence maps, together with citation-grounded reasoning, support explainable and auditable inspection results.
+
+There remain several directions for future work.
+First, while AREP and CTS are designed for conservative evidence recall and continuity, further improving robustness under severe adverse conditions (e.g., heavy occlusion, extreme illumination, and motion blur) is of practical interest, potentially by incorporating adaptive fallback strategies and uncertainty-aware evidence selection.
+Second, expanding the knowledge base and maintaining up-to-date regulations and defect criteria are important for long-term deployment; systematic methods for knowledge curation, validation, and conflict resolution will further enhance reliability.
+Third, extending the framework to broader power inspection tasks with richer modalities (e.g., video streams, thermal sequences, and multi-sensor time series) and studying continual adaptation across sites and devices are promising directions toward scalable industrial applications.
+
+\appendices
+
+Appendixes, if needed, appear before the acknowledgment.
+
+\section*{Acknowledgment}
+
+The preferred spelling of the word ``acknowledgment'' in American English is
+without an ``e'' after the ``g.'' Use the singular heading even if you have
+many acknowledgments. Avoid expressions such as ``One of us (S.B.A.) would
+like to thank $\ldots$ .'' Instead, write ``F. A. Author thanks $\ldots$ .'' In most
+cases, sponsor and financial support acknowledgments are placed in the
+unnumbered footnote on the first page, not here.
+
+\section*{References and Footnotes}
+
+\subsection{References}
+References need not be cited in text. When they are, they appear on the
+line, in square brackets, inside the punctuation. Multiple references are
+each numbered with separate brackets. When citing a section in a book,
+please give the relevant page numbers. In text, refer simply to the
+reference number. Do not use ``Ref.'' or ``reference'' except at the
+beginning of a sentence: ``Reference \cite{b3} shows $\ldots$ .'' Please do not use
+automatic endnotes in \emph{Word}, rather, type the reference list at the end of the
+paper using the ``References'' style.
+
+Reference numbers are set flush left and form a column of their own, hanging
+out beyond the body of the reference. The reference numbers are on the line,
+enclosed in square brackets. In all references, the given name of the author
+or editor is abbreviated to the initial only and precedes the last name. Use
+them all; use \emph{et al.} only if names are not given. Use commas around Jr.,
+Sr., and III in names. Abbreviate conference titles. When citing IEEE
+transactions, provide the issue number, page range, volume number, year,
+and/or month if available. When referencing a patent, provide the day and
+the month of issue, or application. References may not include all
+information; please obtain and include relevant information. Do not combine
+references. There must be only one reference with each number. If there is a
+URL included with the print reference, it can be included at the end of the
+reference.
+
+Other than books, capitalize only the first word in a paper title, except
+for proper nouns and element symbols. For papers published in translation
+journals, please give the English citation first, followed by the original
+foreign-language citation See the end of this document for formats and
+examples of common references. For a complete discussion of references and
+their formats, see the IEEE style manual at
+\underline{http://www.ieee.org/authortools}.
+
+\subsection{Footnotes}
+Number footnotes separately in superscript numbers.\footnote{It is recommended that footnotes be avoided (except for
+  the unnumbered footnote with the receipt date on the first page). Instead,
+try to integrate the footnote information into the text.} Place the actual
+footnote at the bottom of the column in which it is cited; do not put
+footnotes in the reference list (endnotes). Use letters for table footnotes
+(see Table \ref{tab:main_results}).
+
+\section{Submitting Your Paper for Review}
+
+\subsection{Final Stage}
+When you submit your final version (after your paper has been accepted),
+print it in two-column format, including figures and tables. You must also
+send your final manuscript on a disk, via e-mail, or through a Web
+manuscript submission system as directed by the society contact. You may use
+\emph{Zip} for large files, or compress files using \emph{Compress, Pkzip, Stuffit,} or \emph{Gzip.}
+
+Also, send a sheet of paper or PDF with complete contact information for all
+authors. Include full mailing addresses, telephone numbers, fax numbers, and
+e-mail addresses. This information will be used to send each author a
+complimentary copy of the journal in which the paper appears. In addition,
+designate one author as the ``corresponding author.'' This is the author to
+whom proofs of the paper will be sent. Proofs are sent to the corresponding
+author only.
+
+\subsection{Review Stage Using ScholarOne\textregistered\ Manuscripts}
+Contributions to the Transactions, Journals, and Letters may be submitted
+electronically on IEEE's on-line manuscript submission and peer-review
+system, ScholarOne\textregistered\ Manuscripts. You can get a listing of the
+publications that participate in ScholarOne at
+\underline{http://www.ieee.org/publications\_standards/publications/}\discretionary{}{}{}\underline{authors/authors\_submission.html}.
+First check if you have an existing account. If there is none, please create
+a new account. After logging in, go to your Author Center and click ``Submit
+First Draft of a New Manuscript.''
+
+Along with other information, you will be asked to select the subject from a
+pull-down list. Depending on the journal, there are various steps to the
+submission process; you must complete all steps for a complete submission.
+At the end of each step you must click ``Save and Continue''; just uploading
+the paper is not sufficient. After the last step, you should see a
+confirmation that the submission is complete. You should also receive an
+e-mail confirmation. For inquiries regarding the submission of your paper on
+ScholarOne Manuscripts, please contact oprs-support@ieee.org or call +1 732
+465 5861.
+
+ScholarOne Manuscripts will accept files for review in various formats.
+Please check the guidelines of the specific journal for which you plan to
+submit.
+
+You will be asked to file an electronic copyright form immediately upon
+completing the submission process (authors are responsible for obtaining any
+security clearances). Failure to submit the electronic copyright could
+result in publishing delays later. You will also have the opportunity to
+designate your article as ``open access'' if you agree to pay the IEEE open
+access fee.
+
+\subsection{Final Stage Using ScholarOne Manuscripts}
+Upon acceptance, you will receive an email with specific instructions
+regarding the submission of your final files. To avoid any delays in
+publication, please be sure to follow these instructions. Most journals
+require that final submissions be uploaded through ScholarOne Manuscripts,
+although some may still accept final submissions via email. Final
+submissions should include source files of your accepted manuscript, high
+quality graphic files, and a formatted pdf file. If you have any questions
+regarding the final submission process, please contact the administrative
+contact for the journal.
+
+In addition to this, upload a file with complete contact information for all
+authors. Include full mailing addresses, telephone numbers, fax numbers, and
+e-mail addresses. Designate the author who submitted the manuscript on
+ScholarOne Manuscripts as the ``corresponding author.'' This is the only
+author to whom proofs of the paper will be sent.
+
+\subsection{Copyright Form}
+Authors must submit an electronic IEEE Copyright Form (eCF) upon submitting
+their final manuscript files. You can access the eCF system through your
+manuscript submission system or through the Author Gateway. You are
+responsible for obtaining any necessary approvals and/or security
+clearances. For additional information on intellectual property rights,
+visit the IEEE Intellectual Property Rights department web page at
+\underline{http://www.ieee.org/publications\_standards/publications/rights/}\discretionary{}{}{}\underline{index.html}.
+
+\section{IEEE Publishing Policy}
+The general IEEE policy requires that authors should only submit original
+work that has neither appeared elsewhere for publication, nor is under
+review for another refereed publication. The submitting author must disclose
+all prior publication(s) and current submissions when submitting a
+manuscript. Do not publish ``preliminary'' data or results. The submitting
+author is responsible for obtaining agreement of all coauthors and any
+consent required from employers or sponsors before submitting an article.
+The IEEE Transactions and Journals Department strongly discourages courtesy
+authorship; it is the obligation of the authors to cite only relevant prior
+work.
+
+The IEEE Transactions and Journals Department does not publish conference
+records or proceedings, but can publish articles related to conferences that
+have undergone rigorous peer review. Minimally, two reviews are required for
+every article submitted for peer review.
+
+\section{Publication Principles}
+The two types of contents of that are published are; 1) peer-reviewed and 2)
+archival. The Transactions and Journals Department publishes scholarly
+articles of archival value as well as tutorial expositions and critical
+reviews of classical subjects and topics of current interest.
+
+Authors should consider the following points:
+
+\begin{enumerate}
+\item Technical papers submitted for publication must advance the state of knowledge and must cite relevant prior work.
+\item The length of a submitted paper should be commensurate with the importance, or appropriate to the complexity, of the work. For example, an obvious extension of previously published work might not be appropriate for publication or might be adequately treated in just a few pages.
+\item Authors must convince both peer reviewers and the editors of the scientific and technical merit of a paper; the standards of proof are higher when extraordinary or unexpected results are reported.
+\item Because replication is required for scientific progress, papers submitted for publication must provide sufficient information to allow readers to perform similar experiments or calculations and
+use the reported results. Although not everything need be disclosed, a paper
+must contain new, useable, and fully described information. For example, a
+specimen's chemical composition need not be reported if the main purpose of
+a paper is to introduce a new measurement technique. Authors should expect
+to be challenged by reviewers if the results are not supported by adequate
+data and critical details.
+\item Papers that describe ongoing work or announce the latest technical achievement, which are suitable for presentation at a professional conference, may not be appropriate for publication.
+\end{enumerate}
+
+\section{Reference Examples}
+
+\begin{itemize}
+
+\item \emph{Basic format for books:}\\
+J. K. Author, ``Title of chapter in the book,'' in \emph{Title of His Published Book, x}th ed. City of Publisher, (only U.S. State), Country: Abbrev. of Publisher, year, ch. $x$, sec. $x$, pp. \emph{xxx--xxx.}\\
+See \cite{b1,b2}.
+
+\item \emph{Basic format for periodicals:}\\
+J. K. Author, ``Name of paper,'' \emph{Abbrev. Title of Periodical}, vol. \emph{x, no}. $x, $pp\emph{. xxx--xxx, }Abbrev. Month, year, DOI. 10.1109.\emph{XXX}.123456.\\
+See \cite{b3}--\cite{b5}.
+
+\item \emph{Basic format for reports:}\\
+J. K. Author, ``Title of report,'' Abbrev. Name of Co., City of Co., Abbrev. State, Country, Rep. \emph{xxx}, year.\\
+See \cite{b6,b7}.
+
+\item \emph{Basic format for handbooks:}\\
+\emph{Name of Manual/Handbook, x} ed., Abbrev. Name of Co., City of Co., Abbrev. State, Country, year, pp. \emph{xxx--xxx.}\\
+See \cite{b8,b9}.
+
+\item \emph{Basic format for books (when available online):}\\
+J. K. Author, ``Title of chapter in the book,'' in \emph{Title of
+Published Book}, $x$th ed. City of Publisher, State, Country: Abbrev.
+of Publisher, year, ch. $x$, sec. $x$, pp. \emph{xxx--xxx}. [Online].
+Available: \underline{http://www.web.com}\\
+See \cite{b10}--\cite{b13}.
+
+\item \emph{Basic format for journals (when available online):}\\
+J. K. Author, ``Name of paper,'' \emph{Abbrev. Title of Periodical}, vol. $x$, no. $x$, pp. \emph{xxx--xxx}, Abbrev. Month, year. Accessed on: Month, Day, year, DOI: 10.1109.\emph{XXX}.123456, [Online].\\
+See \cite{b14}--\cite{b16}.
+
+\item \emph{Basic format for papers presented at conferences (when available online): }\\
+J.K. Author. (year, month). Title. presented at abbrev. conference title. [Type of Medium]. Available: site/path/file\\
+See \cite{b17}.
+
+\item \emph{Basic format for reports and handbooks (when available online):}\\
+J. K. Author. ``Title of report,'' Company. City, State, Country. Rep. no., (optional: vol./issue), Date. [Online] Available: site/path/file\\
+See \cite{b18,b19}.
+
+\item \emph{Basic format for computer programs and electronic documents (when available online): }\\
+Legislative body. Number of Congress, Session. (year, month day). \emph{Number of bill or resolution}, \emph{Title}. [Type of medium]. Available: site/path/file\\
+\textbf{\emph{NOTE: }ISO recommends that capitalization follow the accepted practice for the language or script in which the information is given.}\\
+See \cite{b20}.
+
+\item \emph{Basic format for patents (when available online):}\\
+Name of the invention, by inventor's name. (year, month day). Patent Number [Type of medium]. Available: site/path/file\\
+See \cite{b21}.
+
+\item \emph{Basic format}\emph{for conference proceedings (published):}\\
+J. K. Author, ``Title of paper,'' in \emph{Abbreviated Name of Conf.}, City of Conf., Abbrev. State (if given), Country, year, pp. \emph{xxxxxx.}\\
+See \cite{b22}.
+
+\item \emph{Example for papers presented at conferences (unpublished):}\\
+See \cite{b23}.
+
+\item \emph{Basic format for patents}$:$\\
+J. K. Author, ``Title of patent,'' U.S. Patent \emph{x xxx xxx}, Abbrev. Month, day, year.\\
+See \cite{b24}.
+
+\item \emph{Basic format for theses (M.S.) and dissertations (Ph.D.):}
+\begin{enumerate}
+  \item J. K. Author, ``Title of thesis,'' M.S. thesis, Abbrev. Dept., Abbrev. Univ., City of Univ., Abbrev. State, year.
+  \item J. K. Author, ``Title of dissertation,'' Ph.D. dissertation, Abbrev. Dept., Abbrev. Univ., City of Univ., Abbrev. State, year.
+\end{enumerate}
+See \cite{b25,b26}.
+
+\item \emph{Basic format for the most common types of unpublished references:}
+\begin{enumerate}
+  \item J. K. Author, private communication, Abbrev. Month, year.
+  \item J. K. Author, ``Title of paper,'' unpublished.
+  \item J. K. Author, ``Title of paper,'' to be published.
+\end{enumerate}
+See \cite{b27}--\cite{b29}.
+
+\item \emph{Basic formats for standards:}
+\begin{enumerate}
+  \item \emph{Title of Standard}, Standard number, date.
+  \item \emph{Title of Standard}, Standard number, Corporate author, location, date.
+\end{enumerate}
+See \cite{b30,b31}.
+
+\item \emph{Article number in~reference examples:}\\
+See \cite{b32,b33}.
+
+\item \emph{Example when using et al.:}\\
+See \cite{b34}.
+
+\end{itemize}
+
+\begin{thebibliography}{00}
+
+\bibitem{b1} G. O. Young, ``Synthetic structure of industrial plastics,'' in \emph{Plastics,} 2\textsuperscript{nd} ed., vol. 3, J. Peters, Ed. New York, NY, USA: McGraw-Hill, 1964, pp. 15--64.
+
+\bibitem{b2} W.-K. Chen, \emph{Linear Networks and Systems.} Belmont, CA, USA: Wadsworth, 1993, pp. 123--135.
+
+\bibitem{b3} J. U. Duncombe, ``Infrared navigation---Part I: An assessment of feasibility,'' \emph{IEEE Trans. Electron Devices}, vol. ED-11, no. 1, pp. 34--39, Jan. 1959, 10.1109/TED.2016.2628402.
+
+\bibitem{b4} E. P. Wigner, ``Theory of traveling-wave optical laser,'' \emph{Phys. Rev}., vol. 134, pp. A635--A646, Dec. 1965.
+
+\bibitem{b5} E. H. Miller, ``A note on reflector arrays,'' \emph{IEEE Trans. Antennas Propagat}., to be published.
+
+\bibitem{b6} E. E. Reber, R. L. Michell, and C. J. Carter, ``Oxygen absorption in the earth's atmosphere,'' Aerospace Corp., Los Angeles, CA, USA, Tech. Rep. TR-0200 (4230-46)-3, Nov. 1988.
+
+\bibitem{b7} J. H. Davis and J. R. Cogdell, ``Calibration program for the 16-foot antenna,'' Elect. Eng. Res. Lab., Univ. Texas, Austin, TX, USA, Tech. Memo. NGL-006-69-3, Nov. 15, 1987.
+
+\bibitem{b8} \emph{Transmission Systems for Communications}, 3\textsuperscript{rd} ed., Western Electric Co., Winston-Salem, NC, USA, 1985, pp. 44--60.
+
+\bibitem{b9} \emph{Motorola Semiconductor Data Manual}, Motorola Semiconductor Products Inc., Phoenix, AZ, USA, 1989.
+
+\bibitem{b10} G. O. Young, ``Synthetic structure of industrial
+plastics,'' in Plastics, vol. 3, Polymers of Hexadromicon, J. Peters,
+Ed., 2\textsuperscript{nd} ed. New York, NY, USA: McGraw-Hill, 1964, pp. 15-64.
+[Online]. Available:
+\underline{http://www.bookref.com}.
+
+\bibitem{b11} \emph{The Founders' Constitution}, Philip B. Kurland
+and Ralph Lerner, eds., Chicago, IL, USA: Univ. Chicago Press, 1987.
+[Online]. Available: \underline{http://press-pubs.uchicago.edu/founders/}
+
+\bibitem{b12} The Terahertz Wave eBook. ZOmega Terahertz Corp., 2014.
+[Online]. Available:
+\underline{http://dl.z-thz.com/eBook/zomega\_ebook\_pdf\_1206\_sr.pdf}. Accessed on: May 19, 2014.
+
+\bibitem{b13} Philip B. Kurland and Ralph Lerner, eds., \emph{The
+Founders' Constitution.} Chicago, IL, USA: Univ. of Chicago Press,
+1987, Accessed on: Feb. 28, 2010, [Online] Available:
+\underline{http://press-pubs.uchicago.edu/founders/}
+
+\bibitem{b14} J. S. Turner, ``New directions in communications,'' \emph{IEEE J. Sel. Areas Commun}., vol. 13, no. 1, pp. 11-23, Jan. 1995.
+
+\bibitem{b15} W. P. Risk, G. S. Kino, and H. J. Shaw, ``Fiber-optic frequency shifter using a surface acoustic wave incident at an oblique angle,'' \emph{Opt. Lett.}, vol. 11, no. 2, pp. 115--117, Feb. 1986.
+
+\bibitem{b16} P. Kopyt \emph{et al., ``}Electric properties of graphene-based conductive layers from DC up to terahertz range,'' \emph{IEEE THz Sci. Technol.,} to be published. DOI: 10.1109/TTHZ.2016.2544142.
+
+\bibitem{b17} PROCESS Corporation, Boston, MA, USA. Intranets:
+Internet technologies deployed behind the firewall for corporate
+productivity. Presented at INET96 Annual Meeting. [Online].
+Available: \underline{http://home.process.com/Intranets/wp2.htp}
+
+\bibitem{b18} R. J. Hijmans and J. van Etten, ``Raster: Geographic analysis and modeling with raster data,'' R Package Version 2.0-12, Jan. 12, 2012. [Online]. Available: \underline {http://CRAN.R-project.org/package=raster}
+
+\bibitem{b19} Teralyzer. Lytera UG, Kirchhain, Germany [Online].
+Available:
+\underline{http://www.lytera.de/Terahertz\_THz\_Spectroscopy.php?id=home}, Accessed on: Jun. 5, 2014
+
+\bibitem{b20} U.S. House. 102\textsuperscript{nd} Congress, 1\textsuperscript{st} Session. (1991, Jan. 11). \emph{H. Con. Res. 1, Sense of the Congress on Approval of}  \emph{Military Action}. [Online]. Available: LEXIS Library: GENFED File: BILLS
+
+\bibitem{b21} Musical toothbrush with mirror, by L.M.R. Brooks. (1992, May 19). Patent D 326 189 [Online]. Available: NEXIS Library: LEXPAT File: DES
+
+\bibitem{b22} D. B. Payne and J. R. Stern, ``Wavelength-switched pas- sively coupled single-mode optical network,'' in \emph{Proc. IOOC-ECOC,} Boston, MA, USA, 1985, pp. 585--590.
+
+\bibitem{b23} D. Ebehard and E. Voges, ``Digital single sideband detection for interferometric sensors,'' presented at the \emph{2\textsuperscript{nd} Int. Conf. Optical Fiber Sensors,} Stuttgart, Germany, Jan. 2-5, 1984.
+
+\bibitem{b24} G. Brandli and M. Dick, ``Alternating current fed power supply,'' U.S. Patent 4 084 217, Nov. 4, 1978.
+
+\bibitem{b25} J. O. Williams, ``Narrow-band analyzer,'' Ph.D. dissertation, Dept. Elect. Eng., Harvard Univ., Cambridge, MA, USA, 1993.
+
+\bibitem{b26} N. Kawasaki, ``Parametric study of thermal and chemical nonequilibrium nozzle flow,'' M.S. thesis, Dept. Electron. Eng., Osaka Univ., Osaka, Japan, 1993.
+
+\bibitem{b27} A. Harrison, private communication, May 1995.
+
+\bibitem{b28} B. Smith, ``An approach to graphs of linear forms,'' unpublished.
+
+\bibitem{b29} A. Brahms, ``Representation error for real numbers in binary computer arithmetic,'' IEEE Computer Group Repository, Paper R-67-85.
+
+\bibitem{b30} IEEE Criteria for Class IE Electric Systems, IEEE Standard 308, 1969.
+
+\bibitem{b31} Letter Symbols for Quantities, ANSI Standard Y10.5-1968.
+
+\bibitem{b32} R. Fardel, M. Nagel, F. Nuesch, T. Lippert, and A. Wokaun, ``Fabrication of organic light emitting diode pixels by laser-assisted forward transfer,'' \emph{Appl. Phys. Lett.}, vol. 91, no. 6, Aug. 2007, Art. no. 061103.~
+
+\bibitem{b33} J. Zhang and N. Tansu, ``Optical gain and laser characteristics of InGaN quantum wells on ternary InGaN substrates,'' \emph{IEEE Photon. J.}, vol. 5, no. 2, Apr. 2013, Art. no. 2600111
+
+\bibitem{b34} S. Azodolmolky~\emph{et al.}, Experimental demonstration of an impairment aware network planning and operation tool for transparent/translucent optical networks,''~\emph{J. Lightw. Technol.}, vol. 29, no. 4, pp. 439--448, Sep. 2011.
+
+\end{thebibliography}
+
+\begin{IEEEbiography}[{\includegraphics[width=1in,height=1.25in,clip,keepaspectratio]{a1.eps}}]{First A. Author} (M'76--SM'81--F'87) and all authors may include
+biographies. Biographies are often not included in conference-related
+papers. This author became a Member (M) of IEEE in 1976, a Senior
+Member (SM) in 1981, and a Fellow (F) in 1987. The first paragraph may
+contain a place and/or date of birth (list place, then date). Next,
+the author's educational background is listed. The degrees should be
+listed with type of degree in what field, which institution, city,
+state, and country, and year the degree was earned. The author's major
+field of study should be lower-cased.
+
+The second paragraph uses the pronoun of the person (he or she) and not the
+author's last name. It lists military and work experience, including summer
+and fellowship jobs. Job titles are capitalized. The current job must have a
+location; previous positions may be listed
+without one. Information concerning previous publications may be included.
+Try not to list more than three books or published articles. The format for
+listing publishers of a book within the biography is: title of book
+(publisher name, year) similar to a reference. Current and previous research
+interests end the paragraph. The third paragraph begins with the author's
+title and last name (e.g., Dr.\ Smith, Prof.\ Jones, Mr.\ Kajor, Ms.\ Hunter).
+List any memberships in professional societies other than the IEEE. Finally,
+list any awards and work for IEEE committees and publications. If a
+photograph is provided, it should be of good quality, and
+professional-looking. Following are two examples of an author's biography.
+\end{IEEEbiography}
+
+\begin{IEEEbiography}[{\includegraphics[width=1in,height=1.25in,clip,keepaspectratio]{a2.eps}}]{Second B. Author} was born in Greenwich Village, New York, NY, USA in
+1977. He received the B.S. and M.S. degrees in aerospace engineering from
+the University of Virginia, Charlottesville, in 2001 and the Ph.D. degree in
+mechanical engineering from Drexel University, Philadelphia, PA, in 2008.
+
+From 2001 to 2004, he was a Research Assistant with the Princeton Plasma
+Physics Laboratory. Since 2009, he has been an Assistant Professor with the
+Mechanical Engineering Department, Texas A{\&}M University, College Station.
+He is the author of three books, more than 150 articles, and more than 70
+inventions. His research interests include high-pressure and high-density
+nonthermal plasma discharge processes and applications, microscale plasma
+discharges, discharges in liquids, spectroscopic diagnostics, plasma
+propulsion, and innovation plasma applications. He is an Associate Editor of
+the journal \emph{Earth, Moon, Planets}, and holds two patents.
+
+Dr. Author was a recipient of the International Association of Geomagnetism
+and Aeronomy Young Scientist Award for Excellence in 2008, and the IEEE
+Electromagnetic Compatibility Society Best Symposium Paper Award in 2011.
+\end{IEEEbiography}
+
+\begin{IEEEbiography}[{\includegraphics[width=1in,height=1.25in,clip,keepaspectratio]{a3.eps}}]{Third C. Author, Jr.} (M'87) received the B.S. degree in mechanical
+engineering from National Chung Cheng University, Chiayi, Taiwan, in 2004
+and the M.S. degree in mechanical engineering from National Tsing Hua
+University, Hsinchu, Taiwan, in 2006. He is currently pursuing the Ph.D.
+degree in mechanical engineering at Texas A{\&}M University, College
+Station, TX, USA.
+
+From 2008 to 2009, he was a Research Assistant with the Institute of
+Physics, Academia Sinica, Tapei, Taiwan. His research interest includes the
+development of surface processing and biological/medical treatment
+techniques using nonthermal atmospheric pressure plasmas, fundamental study
+of plasma sources, and fabrication of micro- or nanostructured surfaces.
+
+Mr. Author's awards and honors include the Frew Fellowship (Australian
+Academy of Science), the I. I. Rabi Prize (APS), the European Frequency and
+Time Forum Award, the Carl Zeiss Research Award, the William F. Meggers
+Award and the Adolph Lomb Medal (OSA).
+\end{IEEEbiography}
+
+\bibliographystyle{IEEEtran}
+\bibliography{refs}
+
+\end{document}
