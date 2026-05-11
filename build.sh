@@ -2,9 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-BUILD_SCRIPT="${LATEX_DOCKER_BUILD:-/mnt/ssd_data/limingxuan/service/scripts/latex-docker-build.sh}"
+MAIN_DIR="${ROOT_DIR}/TII-Articles-LaTeX-template"
 
-"${BUILD_SCRIPT}" \
-  --engine pdflatex \
-  "${ROOT_DIR}" \
-  TII-Articles-LaTeX-template/tii-articles-template.tex
+cd "${MAIN_DIR}"
+latexmk -pdf -interaction=nonstopmode -halt-on-error tii-articles-template.tex
