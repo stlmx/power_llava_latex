@@ -17,7 +17,8 @@
 *.xdv
 
 # LaTeX build outputs
-*.pdf
+/TII-Articles-LaTeX-template/tii-articles-template.pdf
+/tii-articles-template.pdf
 
 # Auto-converted EPS artifacts generated during build
 *-eps-converted-to.pdf
