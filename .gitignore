@@ -1,0 +1,23 @@
+# LaTeX intermediate files
+*.aux
+*.bbl
+*.bcf
+*.blg
+*.fdb_latexmk
+*.fls
+*.lof
+*.log
+*.lot
+*.nav
+*.out
+*.run.xml
+*.snm
+*.synctex.gz
+*.toc
+*.xdv
+
+# LaTeX build outputs
+*.pdf
+
+# Auto-converted EPS artifacts generated during build
+*-eps-converted-to.pdf
